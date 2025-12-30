@@ -1,21 +1,43 @@
-MIT License
+RESTRICTIVE SOFTWARE LICENSE
 
-Copyright (c) 2025 Vittorio Censullo - AITeRTC
+Copyright (c) 2025 Vittorio Censullo - AITeRTC (Associazione Italiana Tecnici di Radiologia Esperti in TC)
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+All Rights Reserved.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+TERMS AND CONDITIONS
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+1. PERMITTED USE
+   You are granted a non-exclusive, non-transferable license to:
+   - Use this software for personal, educational, research, and clinical purposes
+   - Install and run the software on your own systems
+   - Study the source code for educational purposes
+
+2. RESTRICTIONS
+   You are expressly prohibited from:
+   - Redistributing, sharing, or publishing this software or any portion thereof
+     without prior written authorization from the copyright holder
+   - Selling, licensing, sublicensing, or commercially exploiting this software
+   - Modifying and distributing derivative works without authorization
+   - Removing or altering any copyright notices or attributions
+
+3. ATTRIBUTION
+   Any authorized use must include clear attribution to:
+   - Vittorio Censullo
+   - AITeRTC (Associazione Italiana Tecnici di Radiologia Esperti in TC)
+
+4. AUTHORIZATION REQUESTS
+   For redistribution rights, commercial licensing, or other permissions,
+   contact the copyright holder through: https://github.com/vcensullo
+
+5. DISCLAIMER
+   THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+6. TERMINATION
+   This license is automatically terminated if you violate any of its terms.
+   Upon termination, you must destroy all copies of the software in your possession.
