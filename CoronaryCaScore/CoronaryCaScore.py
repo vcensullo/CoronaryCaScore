@@ -292,7 +292,7 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         calibrationNote = qt.QLabel(
             "<i>Scanner-specific factor from phantom calibration.<br>"
-            "Syngo.via default: 0.81 (for 130 HU = 114.5 mg/cm³ CaHA)</i>"
+            "Default: 0.81 (for 130 HU = 114.5 mg/cm³ CaHA)</i>"
         )
         calibrationNote.setStyleSheet("color: gray;")
         massLayout.addRow("", calibrationNote)
@@ -1879,7 +1879,7 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
 
             # Calcium Mass calculation using calibration factor
             # Formula: Mass (mg) = Volume (mm³) × Mean_Density (HU) × Calibration_Factor / 1000
-            # Syngo.via default calibration factor: 0.81 (for 130 HU = 114.5 mg/cm³ CaHA)
+            # Default calibration factor: 0.81 (for 130 HU = 114.5 mg/cm³ CaHA)
             equivalentMass = totalVolume * meanDensity * calibrationFactor / 1000 if totalVolume > 0 else 0
 
             print(f"  {territory}: Score={totalAgatston:.1f} AU, Lesions={validLesionCount}, Volume={totalVolume:.1f} mm³, Mass={equivalentMass:.1f} mg")
