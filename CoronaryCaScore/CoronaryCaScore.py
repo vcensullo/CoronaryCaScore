@@ -277,6 +277,26 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         thresholdNote.setStyleSheet("color: gray;")
         thresholdLayout.addRow("", thresholdNote)
 
+        # Mass calibration section
+        massCollapsible = ctk.ctkCollapsibleButton()
+        massCollapsible.text = "Mass Calibration"
+        settingsLayout.addWidget(massCollapsible)
+        massLayout = qt.QFormLayout(massCollapsible)
+
+        self.calibrationFactorSpinBox = qt.QDoubleSpinBox()
+        self.calibrationFactorSpinBox.setRange(0.50, 1.50)
+        self.calibrationFactorSpinBox.setValue(0.81)
+        self.calibrationFactorSpinBox.setSingleStep(0.01)
+        self.calibrationFactorSpinBox.setDecimals(2)
+        massLayout.addRow("Calibration Factor:", self.calibrationFactorSpinBox)
+
+        calibrationNote = qt.QLabel(
+            "<i>Scanner-specific factor from phantom calibration.<br>"
+            "Syngo.via default: 0.81 (for 130 HU = 114.5 mg/cm³ CaHA)</i>"
+        )
+        calibrationNote.setStyleSheet("color: gray;")
+        massLayout.addRow("", calibrationNote)
+
         # Company branding section
         brandingCollapsible = ctk.ctkCollapsibleButton()
         brandingCollapsible.text = "Report Branding"
@@ -643,6 +663,7 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def saveSettings(self):
         """Save settings to QSettings"""
         self.settings.setValue("threshold", self.thresholdSpinBox.value)
+        self.settings.setValue("calibrationFactor", self.calibrationFactorSpinBox.value)
         self.settings.setValue("logoPath", self.logoPathEdit.text)
         self.settings.setValue("companyDesc", self.companyDescEdit.text)
         slicer.util.infoDisplay("Settings saved successfully!")
@@ -651,6 +672,8 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         """Load settings from QSettings"""
         if self.settings.contains("threshold"):
             self.thresholdSpinBox.setValue(int(self.settings.value("threshold")))
+        if self.settings.contains("calibrationFactor"):
+            self.calibrationFactorSpinBox.setValue(float(self.settings.value("calibrationFactor")))
         if self.settings.contains("logoPath"):
             self.logoPathEdit.setText(self.settings.value("logoPath"))
         if self.settings.contains("companyDesc"):
@@ -963,7 +986,8 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             volumeNode,
             self.segmentationsByTerritory,
             patientInfo,
-            self.thresholdSpinBox.value
+            self.thresholdSpinBox.value,
+            self.calibrationFactorSpinBox.value
         )
 
         # Update results table
@@ -1095,7 +1119,9 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 'includeCharts': self.includeChartsCheck.isChecked(),
                 'includePercentileChart': self.includePercentileChartCheck.isChecked(),
                 'logoPath': self.logoPathEdit.text,
-                'companyDesc': self.companyDescEdit.text
+                'companyDesc': self.companyDescEdit.text,
+                'threshold': self.thresholdSpinBox.value,
+                'calibrationFactor': self.calibrationFactorSpinBox.value
             }
 
             reportPath = self.logic.generatePDFReport(
@@ -1667,7 +1693,7 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
         except Exception as e:
             print(f"Error stopping erase mode: {e}")
 
-    def calculateAllTerritoryScores(self, volumeNode, segmentationsByTerritory, patientInfo, threshold):
+    def calculateAllTerritoryScores(self, volumeNode, segmentationsByTerritory, patientInfo, threshold, calibrationFactor=0.81):
         """Calculate Agatston scores for all territories"""
         results = {}
 
@@ -1676,10 +1702,13 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
         totalMass = 0
         totalLesions = 0
 
+        print(f"\n=== Coronary Calcium Score Calculation ===")
+        print(f"Threshold: {threshold} HU, Calibration Factor: {calibrationFactor}")
+
         # Calculate for each territory
         for territory, segNode in segmentationsByTerritory.items():
             if segNode:
-                territoryResult = self.calculateTerritoryScore(volumeNode, segNode, territory, threshold)
+                territoryResult = self.calculateTerritoryScore(volumeNode, segNode, territory, threshold, calibrationFactor)
                 results[territory] = territoryResult
 
                 totalAgatston += territoryResult.get('agatston_score', 0)
@@ -1688,6 +1717,8 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
                 totalLesions += territoryResult.get('num_lesions', 0)
             else:
                 results[territory] = self.getEmptyResult()
+
+        print(f"\n=== TOTAL: Score={totalAgatston:.1f} AU, Volume={totalVolume:.1f} mm³, Mass={totalMass:.1f} mg ===\n")
 
         # Calculate total
         results['Total'] = {
@@ -1701,7 +1732,7 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
 
         return results
 
-    def calculateTerritoryScore(self, volumeNode, segmentationNode, territory, threshold):
+    def calculateTerritoryScore(self, volumeNode, segmentationNode, territory, threshold, calibrationFactor=0.81):
         """Calculate Agatston score for a single territory using standardized method
 
         This implementation follows the Agatston standard:
@@ -1845,9 +1876,13 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
             # Calculate statistics
             meanDensity = np.mean(allDensities) if allDensities else 0
             maxDensity = np.max(allDensities) if allDensities else 0
-            equivalentMass = totalVolume * (meanDensity / 1000) * 1.2 if totalVolume > 0 else 0
 
-            print(f"  {territory}: Score={totalAgatston:.1f} AU, Lesions={validLesionCount}, Volume={totalVolume:.1f} mm³")
+            # Calcium Mass calculation using calibration factor
+            # Formula: Mass (mg) = Volume (mm³) × Mean_Density (HU) × Calibration_Factor / 1000
+            # Syngo.via default calibration factor: 0.81 (for 130 HU = 114.5 mg/cm³ CaHA)
+            equivalentMass = totalVolume * meanDensity * calibrationFactor / 1000 if totalVolume > 0 else 0
+
+            print(f"  {territory}: Score={totalAgatston:.1f} AU, Lesions={validLesionCount}, Volume={totalVolume:.1f} mm³, Mass={equivalentMass:.1f} mg")
 
             return {
                 'agatston_score': totalAgatston,
@@ -2070,6 +2105,28 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
             ]))
             story.append(patientTable)
+            story.append(Spacer(1, 0.3*inch))
+
+            # Analysis Parameters
+            story.append(Paragraph("<b>ANALYSIS PARAMETERS</b>", styles['Heading2']))
+            threshold = options.get('threshold', 130)
+            calibFactor = options.get('calibrationFactor', 0.81)
+            paramData = [
+                ['Threshold', f'{threshold} HU (Standard Agatston)'],
+                ['Mass Calibration Factor', f'{calibFactor:.2f}'],
+                ['Method', '2D slice-by-slice connected components'],
+                ['Minimum Lesion Area', '1.0 mm² per slice']
+            ]
+            paramTable = Table(paramData, colWidths=[2*inch, 4*inch])
+            paramTable.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
+            ]))
+            story.append(paramTable)
             story.append(Spacer(1, 0.3*inch))
 
             # Results by Territory
