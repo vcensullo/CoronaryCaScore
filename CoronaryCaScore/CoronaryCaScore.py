@@ -195,7 +195,7 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         """Setup collapsible patient information section"""
         patientCollapsible = ctk.ctkCollapsibleButton()
         patientCollapsible.text = "Patient Information"
-        patientCollapsible.collapsed = True
+        patientCollapsible.collapsed = False  # Expanded by default for visibility
         self.layout.addWidget(patientCollapsible)
 
         patientLayout = qt.QFormLayout(patientCollapsible)
@@ -223,20 +223,20 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         sexLayout.addStretch()
         patientLayout.addRow("Sex*:", sexLayout)
 
-        # Age
+        # Age (required for MESA percentile)
         self.patientAgeSpinBox = qt.QSpinBox()
         self.patientAgeSpinBox.setRange(0, 120)
         self.patientAgeSpinBox.setValue(0)
         self.patientAgeSpinBox.setSpecialValueText("Not specified")
-        patientLayout.addRow("Age:", self.patientAgeSpinBox)
+        patientLayout.addRow("Age*:", self.patientAgeSpinBox)
 
         # Ethnicity (for MESA percentiles)
         self.ethnicityComboBox = qt.QComboBox()
         self.ethnicityComboBox.addItems(self.ETHNICITIES)
-        patientLayout.addRow("Ethnicity:", self.ethnicityComboBox)
+        patientLayout.addRow("Ethnicity*:", self.ethnicityComboBox)
 
         # Mandatory note
-        mandatoryLabel = qt.QLabel("<i>* Required for MESA percentile calculation</i>")
+        mandatoryLabel = qt.QLabel("<i>* Sex, Age (45+), and Ethnicity required for MESA percentile</i>")
         mandatoryLabel.setStyleSheet("color: gray;")
         patientLayout.addRow("", mandatoryLabel)
 
@@ -943,7 +943,8 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.patientInfo['name'] = self.patientNameEdit.text
         self.patientInfo['id'] = self.patientIdEdit.text
         self.patientInfo['sex'] = 'M' if self.maleRadio.isChecked() else 'F'
-        self.patientInfo['age'] = self.patientAgeSpinBox.value if self.patientAgeSpinBox.value > 0 else None
+        age = self.patientAgeSpinBox.value
+        self.patientInfo['age'] = age if age > 0 else None
         self.patientInfo['ethnicity'] = self.ethnicityComboBox.currentText
         self.patientInfo['date'] = datetime.now().strftime("%Y-%m-%d")
         return self.patientInfo
