@@ -1702,96 +1702,166 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
         return results
 
     def calculateTerritoryScore(self, volumeNode, segmentationNode, territory, threshold):
-        """Calculate Agatston score for a single territory"""
-        try:
-            # Export segmentation to labelmap
-            labelmapNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLabelMapVolumeNode", "tempLabelmap")
-            slicer.modules.segmentations.logic().ExportVisibleSegmentsToLabelmapNode(
-                segmentationNode, labelmapNode, volumeNode
-            )
+        """Calculate Agatston score for a single territory using standardized method
 
-            # Get arrays
-            labelmapArray = slicer.util.arrayFromVolume(labelmapNode)
+        This implementation follows the Agatston standard:
+        - 2D slice-by-slice connected component labeling
+        - Minimum 1 mm² area per lesion per slice
+        - Density factor determined per slice
+        - Handles overlapping slices (skips if spacing < 2.5mm)
+        """
+        try:
+            from scipy import ndimage
+
+            # Get segment array
+            segmentId = segmentationNode.GetSegmentation().GetNthSegmentID(0)
+            segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, segmentId, volumeNode)
             volumeArray = slicer.util.arrayFromVolume(volumeNode)
 
-            # Get spacing
-            spacing = volumeNode.GetSpacing()
-            sliceArea = spacing[0] * spacing[1]
-            sliceThickness = spacing[2]
+            if segmentArray is None or not np.any(segmentArray):
+                return self.getEmptyResult()
 
-            # Calculate Agatston score
+            # Get spacing for area/volume calculation
+            spacing = volumeNode.GetSpacing()
+            sliceArea = spacing[0] * spacing[1]  # mm² per pixel
+            sliceSpacing = spacing[2]
+
+            # Try to get slice thickness from DICOM metadata
+            sliceThickness = None
+            try:
+                import pydicom
+                storageNode = volumeNode.GetStorageNode()
+                if storageNode:
+                    filePath = storageNode.GetFileName()
+                    if filePath:
+                        dicom = pydicom.dcmread(filePath, stop_before_pixels=True)
+                        if hasattr(dicom, 'SliceThickness'):
+                            sliceThickness = float(dicom.SliceThickness)
+                            print(f"  DICOM Slice Thickness: {sliceThickness:.1f}mm")
+            except:
+                pass
+
+            if sliceThickness is None:
+                sliceThickness = sliceSpacing
+
+            # CRITICAL: Handle overlapping slices (standard Agatston uses 3mm increment)
+            STANDARD_SLICE_INCREMENT = 3.0  # mm (Agatston standard)
+
+            if sliceSpacing < 2.5:  # Overlapping slices detected
+                sliceStep = max(1, int(round(STANDARD_SLICE_INCREMENT / sliceSpacing)))
+                print(f"  {territory}: Overlapping slices (spacing={sliceSpacing:.1f}mm), using step={sliceStep}")
+            else:
+                sliceStep = 1
+
+            # 2D slice-by-slice connected component labeling (Agatston standard)
+            labeled_array = np.zeros_like(segmentArray, dtype=np.int32)
+            lesion_counter = 0
+
+            for sliceIdx in range(0, segmentArray.shape[0], sliceStep):
+                sliceMask = segmentArray[sliceIdx, :, :]
+                if np.any(sliceMask):
+                    # Label lesions in this slice only (2D connectivity)
+                    labeled_slice, n_lesions_in_slice = ndimage.label(sliceMask)
+                    labeled_slice[labeled_slice > 0] += lesion_counter
+                    labeled_array[sliceIdx, :, :] = labeled_slice
+                    lesion_counter += n_lesions_in_slice
+
+            num_lesions = lesion_counter
+
+            # Agatston standard: minimum 1 mm² area per slice
+            MIN_AREA_MM2_STANDARD = 1.0
+            minPixelsFor1mm2 = int(np.ceil(MIN_AREA_MM2_STANDARD / sliceArea))
+            MIN_PIXELS_PER_SLICE = max(2, minPixelsFor1mm2)
+            MIN_AREA_MM2 = MIN_PIXELS_PER_SLICE * sliceArea
+
+            # Calculate metrics
             totalAgatston = 0
             totalVolume = 0
             allDensities = []
-            numLesions = 0
+            validLesionCount = 0
 
-            # Process slice by slice
-            for z in range(labelmapArray.shape[0]):
-                sliceMask = labelmapArray[z] > 0
-                if not np.any(sliceMask):
-                    continue
-
-                sliceVolume = volumeArray[z]
-                calciumPixels = sliceVolume[sliceMask]
-
-                if len(calciumPixels) == 0:
-                    continue
+            for lesion_id in range(1, num_lesions + 1):
+                lesionMask = (labeled_array == lesion_id)
+                lesionVoxels = volumeArray[lesionMask]
 
                 # Filter by threshold
-                calciumPixels = calciumPixels[calciumPixels >= threshold]
-
-                if len(calciumPixels) == 0:
+                lesionVoxels = lesionVoxels[lesionVoxels >= threshold]
+                if len(lesionVoxels) == 0:
                     continue
 
-                # Calculate area and check minimum
-                area_mm2 = len(calciumPixels) * sliceArea
+                allDensities.extend(lesionVoxels.tolist())
 
-                if area_mm2 < 1.0:  # Minimum 1 mm²
-                    continue
+                # Calculate Agatston score slice-by-slice (STANDARD METHOD)
+                lesionScore = 0
+                lesionVolume = 0
+                lesionHasValidSlice = False
 
-                # Get max density for density factor
-                maxDensity = np.max(calciumPixels)
-                allDensities.extend(calciumPixels.tolist())
+                for sliceIdx in range(lesionMask.shape[0]):
+                    sliceMask = lesionMask[sliceIdx, :, :]
+                    if np.any(sliceMask):
+                        # Get voxels in this slice and filter by threshold
+                        sliceVoxels = volumeArray[sliceIdx, :, :][sliceMask]
+                        sliceVoxels = sliceVoxels[sliceVoxels >= threshold]
 
-                # Calculate density factor
-                if maxDensity < 200:
-                    densityFactor = 1
-                elif maxDensity < 300:
-                    densityFactor = 2
-                elif maxDensity < 400:
-                    densityFactor = 3
-                else:
-                    densityFactor = 4
+                        if len(sliceVoxels) == 0:
+                            continue
 
-                # Calculate score for this slice
-                sliceScore = area_mm2 * densityFactor
-                totalAgatston += sliceScore
+                        # Calculate area for this slice
+                        pixelCount = len(sliceVoxels)
+                        area_mm2 = pixelCount * sliceArea
 
-                # Calculate volume
-                sliceVol = area_mm2 * sliceThickness
-                totalVolume += sliceVol
+                        # CRITICAL: Filter by minimum area PER LESION PER SLICE
+                        if area_mm2 < MIN_AREA_MM2:
+                            continue
 
-                numLesions += 1
+                        lesionHasValidSlice = True
+
+                        # Get max density in THIS SLICE (Agatston standard)
+                        maxDensityInSlice = np.max(sliceVoxels)
+
+                        # Determine density factor for THIS SLICE
+                        if maxDensityInSlice >= 400:
+                            densityFactor = 4
+                        elif maxDensityInSlice >= 300:
+                            densityFactor = 3
+                        elif maxDensityInSlice >= 200:
+                            densityFactor = 2
+                        else:  # 130-199
+                            densityFactor = 1
+
+                        # Calculate score for this slice
+                        lesionScore += area_mm2 * densityFactor
+
+                        # Volume calculation with slice step adjustment
+                        sliceVolumeContribution = pixelCount * sliceArea * (sliceSpacing * sliceStep)
+                        lesionVolume += sliceVolumeContribution
+
+                # Only count lesion if it has at least one valid slice
+                if lesionHasValidSlice:
+                    validLesionCount += 1
+                    totalAgatston += lesionScore
+                    totalVolume += lesionVolume
 
             # Calculate statistics
             meanDensity = np.mean(allDensities) if allDensities else 0
             maxDensity = np.max(allDensities) if allDensities else 0
             equivalentMass = totalVolume * (meanDensity / 1000) * 1.2 if totalVolume > 0 else 0
 
-            # Cleanup
-            slicer.mrmlScene.RemoveNode(labelmapNode)
+            print(f"  {territory}: Score={totalAgatston:.1f} AU, Lesions={validLesionCount}, Volume={totalVolume:.1f} mm³")
 
             return {
                 'agatston_score': totalAgatston,
                 'total_volume_mm3': totalVolume,
                 'equivalent_mass_mg': equivalentMass,
-                'num_lesions': numLesions,
+                'num_lesions': validLesionCount,
                 'mean_density': meanDensity,
                 'max_density': maxDensity
             }
 
         except Exception as e:
             print(f"Error calculating score for {territory}: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return self.getEmptyResult()
 
     def getEmptyResult(self):
