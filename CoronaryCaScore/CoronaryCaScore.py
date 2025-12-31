@@ -2343,10 +2343,15 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
         threeDView.resetFocalPoint()
         threeDView.resetCamera()
 
-        # Set dark background for better contrast
+        # Configure 3D view appearance
         viewNode = threeDView.mrmlViewNode()
         viewNode.SetBackgroundColor(0.1, 0.1, 0.15)
         viewNode.SetBackgroundColor2(0.2, 0.2, 0.25)
+
+        # Hide orientation axes and box
+        viewNode.SetOrientationMarkerType(slicer.vtkMRMLViewNode.OrientationMarkerTypeNone)
+        viewNode.SetBoxVisible(False)
+        viewNode.SetAxisLabelsVisible(False)
 
     def createCharts(self, results, territories, patientInfo=None, showInWindow=True):
         """Create analysis charts and optionally display in a window
