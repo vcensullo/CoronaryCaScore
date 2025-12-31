@@ -776,13 +776,19 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         vizLayout = qt.QHBoxLayout()
         vizLayout.setSpacing(10)
 
-        self.show3DButton = qt.QPushButton("  Show 3D")
+        self.show3DButton = qt.QPushButton("Show 3D")
         self.show3DButton.setObjectName("secondaryButton")
         self.show3DButton.setMinimumHeight(38)
         self.show3DButton.clicked.connect(self.onShow3D)
         vizLayout.addWidget(self.show3DButton)
 
-        self.showChartsButton = qt.QPushButton("  Show Charts")
+        self.showMPRButton = qt.QPushButton("MPR View")
+        self.showMPRButton.setObjectName("secondaryButton")
+        self.showMPRButton.setMinimumHeight(38)
+        self.showMPRButton.clicked.connect(self.onShowMPR)
+        vizLayout.addWidget(self.showMPRButton)
+
+        self.showChartsButton = qt.QPushButton("Show Charts")
         self.showChartsButton.setObjectName("secondaryButton")
         self.showChartsButton.setMinimumHeight(38)
         self.showChartsButton.clicked.connect(self.onShowCharts)
@@ -1336,13 +1342,18 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.percentileDescriptionLabel.setText("")
 
     def onShow3D(self):
-        """Show 3D visualization of calcium by territory with heart VRT"""
+        """Show 3D visualization of calcium by territory"""
         if not self.currentResults:
             slicer.util.warningDisplay("Please calculate scores first")
             return
 
         volumeNode = self.volumeSelector.currentNode()
         self.logic.create3DVisualization(self.segmentationsByTerritory, self.TERRITORIES, volumeNode)
+
+    def onShowMPR(self):
+        """Restore standard MPR (multiplanar) view"""
+        volumeNode = self.volumeSelector.currentNode()
+        self.logic.showMPRView(volumeNode)
 
     def onShowCharts(self):
         """Show analysis charts"""
@@ -2235,100 +2246,14 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
         except KeyError:
             return {'percentile': '--', 'comparison': 'Percentile data not available'}
 
-    def createHeartContextSegment(self, volumeNode):
-        """Create a semi-transparent heart segment for anatomical context in 3D view"""
-        try:
-            import numpy as np
-            from scipy import ndimage
-
-            # Check if heart context node already exists
-            existingNodes = slicer.util.getNodesByClass("vtkMRMLSegmentationNode")
-            heartContextNode = None
-            for node in existingNodes:
-                if node.GetName() == "Heart_Context_3D":
-                    heartContextNode = node
-                    break
-
-            # Create new node if not exists
-            if heartContextNode is None:
-                heartContextNode = slicer.mrmlScene.AddNewNodeByClass(
-                    "vtkMRMLSegmentationNode",
-                    "Heart_Context_3D"
-                )
-                heartContextNode.SetReferenceImageGeometryParameterFromVolumeNode(volumeNode)
-                heartContextNode.CreateDefaultDisplayNodes()
-
-            segmentation = heartContextNode.GetSegmentation()
-
-            # Check if heart segment already exists
-            heartSegmentId = None
-            for i in range(segmentation.GetNumberOfSegments()):
-                segmentId = segmentation.GetNthSegmentID(i)
-                segment = segmentation.GetSegment(segmentId)
-                if segment.GetName() == "Heart_Context":
-                    heartSegmentId = segmentId
-                    break
-
-            # Get volume array
-            volumeArray = slicer.util.arrayFromVolume(volumeNode)
-
-            # Create heart/mediastinum mask: soft tissues (between -100 and +300 HU)
-            # This captures heart chambers, myocardium, and great vessels
-            heartMask = ((volumeArray >= -100) & (volumeArray <= 300)).astype(np.uint8)
-
-            # Morphological operations to clean up the mask
-            # Fill small holes
-            heartMask = ndimage.binary_fill_holes(heartMask).astype(np.uint8)
-            # Smooth the surface with closing operation
-            heartMask = ndimage.binary_closing(heartMask, structure=np.ones((3,3,3))).astype(np.uint8)
-            # Optional: erosion to reduce noise
-            heartMask = ndimage.binary_erosion(heartMask, structure=np.ones((2,2,2))).astype(np.uint8)
-
-            # Create or update segment
-            if heartSegmentId is None:
-                heartSegmentId = segmentation.AddEmptySegment("Heart_Context")
-
-            segment = segmentation.GetSegment(heartSegmentId)
-
-            # Set color: light pinkish/flesh tone for heart
-            segment.SetColor(0.9, 0.75, 0.7)
-
-            # Update segment data
-            slicer.util.updateSegmentBinaryLabelmapFromArray(
-                heartMask,
-                heartContextNode,
-                heartSegmentId,
-                volumeNode
-            )
-
-            # Create 3D representation and set transparency
-            heartContextNode.CreateClosedSurfaceRepresentation()
-            displayNode = heartContextNode.GetDisplayNode()
-            if displayNode:
-                displayNode.SetSegmentOpacity3D(heartSegmentId, 0.15)  # 15% opacity
-                displayNode.SetVisibility(True)
-                displayNode.SetVisibility3D(True)
-
-            return heartContextNode
-
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            print(f"Warning: Could not create heart context: {str(e)}")
-            return None
-
     def create3DVisualization(self, segmentationsByTerritory, territories, volumeNode=None):
-        """Create 3D visualization with territory-based coloring and heart context"""
+        """Create 3D visualization with territory-based coloring"""
         # Set up 3D-only layout
         layoutManager = slicer.app.layoutManager()
         layoutManager.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUp3DView)
 
         threeDWidget = layoutManager.threeDWidget(0)
         threeDView = threeDWidget.threeDView()
-
-        # Create heart context for anatomical reference (semi-transparent)
-        if volumeNode:
-            self.createHeartContextSegment(volumeNode)
 
         # Show each territory's segmentation in 3D with full opacity
         for territory, segNode in segmentationsByTerritory.items():
@@ -2352,6 +2277,16 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
         viewNode.SetOrientationMarkerType(slicer.vtkMRMLViewNode.OrientationMarkerTypeNone)
         viewNode.SetBoxVisible(False)
         viewNode.SetAxisLabelsVisible(False)
+
+    def showMPRView(self, volumeNode=None):
+        """Restore standard multiplanar reconstruction (MPR) view"""
+        layoutManager = slicer.app.layoutManager()
+        layoutManager.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutFourUpView)
+
+        # Center on volume if provided
+        if volumeNode:
+            slicer.util.setSliceViewerLayers(background=volumeNode)
+            slicer.util.resetSliceViews()
 
     def createCharts(self, results, territories, patientInfo=None, showInWindow=True):
         """Create analysis charts and optionally display in a window
