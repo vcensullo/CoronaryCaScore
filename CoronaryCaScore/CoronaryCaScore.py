@@ -1081,12 +1081,13 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.percentileDescriptionLabel.setText("")
 
     def onShow3D(self):
-        """Show 3D visualization of calcium by territory"""
+        """Show 3D visualization of calcium by territory with heart VRT"""
         if not self.currentResults:
             slicer.util.warningDisplay("Please calculate scores first")
             return
 
-        self.logic.create3DVisualization(self.segmentationsByTerritory, self.TERRITORIES)
+        volumeNode = self.volumeSelector.currentNode()
+        self.logic.create3DVisualization(self.segmentationsByTerritory, self.TERRITORIES, volumeNode)
 
     def onShowCharts(self):
         """Show analysis charts"""
@@ -1978,69 +1979,168 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
         except KeyError:
             return {'percentile': '--', 'comparison': 'Percentile data not available'}
 
-    def create3DVisualization(self, segmentationsByTerritory, territories):
-        """Create 3D visualization with territory-based coloring"""
-        # Set up 3D view
+    def create3DVisualization(self, segmentationsByTerritory, territories, volumeNode=None):
+        """Create 3D visualization with territory-based coloring and semi-transparent heart VRT"""
+        # Set up 3D-only layout
         layoutManager = slicer.app.layoutManager()
+        layoutManager.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUp3DView)
+
         threeDWidget = layoutManager.threeDWidget(0)
         threeDView = threeDWidget.threeDView()
 
-        # Show each territory's segmentation in 3D
+        # Create volume rendering of the heart if volume is provided
+        if volumeNode:
+            # Get or create volume rendering display node
+            volRenLogic = slicer.modules.volumerendering.logic()
+            displayNode = volRenLogic.GetFirstVolumeRenderingDisplayNode(volumeNode)
+
+            if not displayNode:
+                displayNode = volRenLogic.CreateDefaultVolumeRenderingNodes(volumeNode)
+
+            if displayNode:
+                # Set preset for cardiac CT (soft tissue)
+                displayNode.SetVisibility(True)
+
+                # Get the volume property and set opacity for semi-transparency
+                volumeProperty = displayNode.GetVolumePropertyNode()
+                if volumeProperty:
+                    # Create a custom opacity function for heart visualization
+                    opacityFunc = vtk.vtkPiecewiseFunction()
+                    # Low opacity for soft tissue to see through
+                    opacityFunc.AddPoint(-1000, 0.0)    # Air - invisible
+                    opacityFunc.AddPoint(-100, 0.0)     # Fat - invisible
+                    opacityFunc.AddPoint(0, 0.0)        # Water - invisible
+                    opacityFunc.AddPoint(100, 0.05)     # Soft tissue - very faint
+                    opacityFunc.AddPoint(200, 0.08)     # Muscle - faint
+                    opacityFunc.AddPoint(300, 0.0)      # Start hiding calcium range (will show via segmentation)
+                    opacityFunc.AddPoint(1000, 0.0)     # Bone - hidden (we want calcium from segmentation)
+
+                    volumeProperty.GetVolumeProperty().SetScalarOpacity(opacityFunc)
+
+                    # Color transfer function - gray for soft tissue
+                    colorFunc = vtk.vtkColorTransferFunction()
+                    colorFunc.AddRGBPoint(-1000, 0.0, 0.0, 0.0)
+                    colorFunc.AddRGBPoint(0, 0.5, 0.4, 0.4)      # Soft pinkish-gray
+                    colorFunc.AddRGBPoint(200, 0.7, 0.6, 0.6)    # Lighter
+                    colorFunc.AddRGBPoint(500, 0.8, 0.8, 0.8)    # Light gray
+
+                    volumeProperty.GetVolumeProperty().SetColor(colorFunc)
+
+                print("Heart VRT created with semi-transparency")
+
+        # Show each territory's segmentation in 3D with full opacity
         for territory, segNode in segmentationsByTerritory.items():
             if segNode:
                 segNode.CreateClosedSurfaceRepresentation()
                 displayNode = segNode.GetDisplayNode()
                 if displayNode:
                     displayNode.SetVisibility3D(True)
-                    displayNode.SetOpacity3D(0.8)
+                    displayNode.SetOpacity3D(1.0)  # Full opacity for calcium
+                    displayNode.SetVisibility2DFill(False)  # Hide in 2D views
 
-        # Reset 3D view
+        # Reset 3D view and set background
         threeDView.resetFocalPoint()
         threeDView.resetCamera()
 
-    def createCharts(self, results, territories):
-        """Create analysis charts"""
+        # Set dark background for better contrast
+        viewNode = threeDView.mrmlViewNode()
+        viewNode.SetBackgroundColor(0.1, 0.1, 0.15)
+        viewNode.SetBackgroundColor2(0.2, 0.2, 0.25)
+
+    def createCharts(self, results, territories, showInWindow=True):
+        """Create analysis charts and optionally display in a window
+
+        Returns the path to the saved chart image for PDF inclusion.
+        """
         try:
             import matplotlib
             matplotlib.use('Agg')
             import matplotlib.pyplot as plt
 
             # Create figure with subplots
-            fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+            fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 
             # Bar chart of scores by territory
             territoryNames = list(territories.keys())
             scores = [results.get(t, {}).get('agatston_score', 0) for t in territoryNames]
             colors = [territories[t]['colorHex'] for t in territoryNames]
 
-            axes[0].bar(territoryNames, scores, color=colors)
+            axes[0].bar(territoryNames, scores, color=colors, edgecolor='black', linewidth=0.5)
             axes[0].set_ylabel('Agatston Score (AU)')
-            axes[0].set_title('Calcium Score by Coronary Territory')
+            axes[0].set_title('Calcium Score by Territory')
+            axes[0].set_xlabel('Coronary Territory')
+
+            # Add value labels on bars
+            for i, (name, score) in enumerate(zip(territoryNames, scores)):
+                if score > 0:
+                    axes[0].text(i, score + max(scores)*0.02, f'{score:.0f}', ha='center', va='bottom', fontsize=9)
 
             # Pie chart of distribution
             nonzeroScores = [(t, s) for t, s in zip(territoryNames, scores) if s > 0]
             if nonzeroScores:
                 labels, values = zip(*nonzeroScores)
                 pieColors = [territories[t]['colorHex'] for t in labels]
-                axes[1].pie(values, labels=labels, colors=pieColors, autopct='%1.1f%%')
+                wedges, texts, autotexts = axes[1].pie(values, labels=labels, colors=pieColors,
+                                                        autopct='%1.1f%%', startangle=90)
                 axes[1].set_title('Distribution by Territory')
             else:
-                axes[1].text(0.5, 0.5, 'No calcium detected', ha='center', va='center')
+                axes[1].text(0.5, 0.5, 'No calcium detected', ha='center', va='center', fontsize=12)
                 axes[1].set_title('Distribution by Territory')
+                axes[1].axis('off')
 
             plt.tight_layout()
 
-            # Save and display
+            # Save chart
             import tempfile
             chartPath = os.path.join(tempfile.gettempdir(), 'coronary_cac_charts.png')
-            plt.savefig(chartPath, dpi=150, bbox_inches='tight')
+            plt.savefig(chartPath, dpi=150, bbox_inches='tight', facecolor='white')
             plt.close()
 
-            # Display in Slicer
-            slicer.util.infoDisplay(f"Charts saved to: {chartPath}")
+            # Display in a Qt window if requested
+            if showInWindow:
+                self.showChartWindow(chartPath, results, territories)
+
+            return chartPath
 
         except ImportError:
             slicer.util.warningDisplay("matplotlib not installed. Please install dependencies.")
+            return None
+
+    def showChartWindow(self, chartPath, results, territories):
+        """Display charts in a popup window"""
+        # Create dialog
+        dialog = qt.QDialog()
+        dialog.setWindowTitle("Coronary Calcium Score - Charts")
+        dialog.setMinimumSize(800, 500)
+
+        layout = qt.QVBoxLayout(dialog)
+
+        # Add title
+        titleLabel = qt.QLabel("<h2>Calcium Score Distribution</h2>")
+        titleLabel.setAlignment(qt.Qt.AlignCenter)
+        layout.addWidget(titleLabel)
+
+        # Add chart image
+        if os.path.exists(chartPath):
+            imageLabel = qt.QLabel()
+            pixmap = qt.QPixmap(chartPath)
+            scaledPixmap = pixmap.scaledToWidth(750, qt.Qt.SmoothTransformation)
+            imageLabel.setPixmap(scaledPixmap)
+            imageLabel.setAlignment(qt.Qt.AlignCenter)
+            layout.addWidget(imageLabel)
+
+        # Add summary
+        totalScore = results.get('Total', {}).get('agatston_score', 0)
+        summaryLabel = qt.QLabel(f"<b>Total Agatston Score: {totalScore:.1f} AU</b>")
+        summaryLabel.setAlignment(qt.Qt.AlignCenter)
+        layout.addWidget(summaryLabel)
+
+        # Close button
+        closeButton = qt.QPushButton("Close")
+        closeButton.clicked.connect(dialog.close)
+        layout.addWidget(closeButton)
+
+        dialog.exec_()
 
     def generatePDFReport(self, outputDir, results, patientInfo, territories, segmentationsByTerritory, volumeNode, options):
         """Generate comprehensive PDF report"""
@@ -2189,6 +2289,17 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
             ]))
             story.append(riskTable)
             story.append(Spacer(1, 0.3*inch))
+
+            # Add charts if option enabled
+            if options.get('includeCharts', True):
+                # Generate chart image
+                chartPath = self.createCharts(results, territories, showInWindow=False)
+                if chartPath and os.path.exists(chartPath):
+                    story.append(Paragraph("<b>CALCIUM DISTRIBUTION CHARTS</b>", styles['Heading2']))
+                    from reportlab.platypus import Image
+                    chartImg = Image(chartPath, width=6*inch, height=2.4*inch)
+                    story.append(chartImg)
+                    story.append(Spacer(1, 0.3*inch))
 
             # References
             story.append(Paragraph("<b>REFERENCES</b>", styles['Heading2']))
