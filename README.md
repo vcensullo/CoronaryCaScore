@@ -49,7 +49,23 @@
 
 ## Installation
 
-### Manual Installation
+### Method 1: Download ZIP (Easiest)
+
+1. Download the repository as ZIP from [GitHub](https://github.com/vcensullo/CoronaryCaScore/archive/refs/heads/main.zip)
+
+2. Extract the ZIP to a folder of your choice
+
+3. Open 3D Slicer
+
+4. Go to **Edit -> Application Settings -> Modules**
+
+5. In "Additional module paths", click **Add** and select the `CoronaryCaScore-main/CoronaryCaScore` folder
+
+6. Restart 3D Slicer
+
+7. The module will appear under **Modules -> Cardiac -> Coronary Artery Calcium Score**
+
+### Method 2: Git Clone
 
 1. Clone this repository:
    ```bash
@@ -58,9 +74,9 @@
 
 2. Open 3D Slicer
 
-3. Go to **Edit -> Application Settings -> Modules -> Additional module paths**
+3. Go to **Edit -> Application Settings -> Modules**
 
-4. Add the path to the `CoronaryCaScore` folder
+4. In "Additional module paths", click **Add** and select the `CoronaryCaScore/CoronaryCaScore` folder
 
 5. Restart 3D Slicer
 

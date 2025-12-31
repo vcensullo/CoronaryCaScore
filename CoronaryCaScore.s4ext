@@ -1,0 +1,35 @@
+# Extension metadata for 3D Slicer Extensions Index
+
+scm git
+scmurl https://github.com/vcensullo/CoronaryCaScore
+scmrevision main
+
+# Dependencies (NA = none)
+depends NA
+
+# Inner build directory
+build_subdirectory .
+
+# Homepage
+homepage https://github.com/vcensullo/CoronaryCaScore
+
+# Contributors
+contributors Vittorio Censullo (AITeRTC)
+
+# Category in Slicer Modules menu
+category Cardiac
+
+# Icon URL (128x128 png)
+iconurl https://raw.githubusercontent.com/vcensullo/CoronaryCaScore/main/CoronaryCaScore.png
+
+# Status
+status stable
+
+# Description (one line)
+description Coronary artery calcium scoring using Agatston method with per-vessel analysis (LAD, LCx, RCA, LM) and MESA percentile calculation.
+
+# Screenshots
+screenshoturls https://raw.githubusercontent.com/vcensullo/CoronaryCaScore/main/Screenshots/screenshot1.png
+
+# Enable after installation
+enabled 1
