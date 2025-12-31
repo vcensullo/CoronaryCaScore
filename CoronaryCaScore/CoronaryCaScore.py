@@ -2096,7 +2096,7 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
 
         # Close button
         closeButton = qt.QPushButton("Close")
-        closeButton.clicked.connect(dialog.close)
+        closeButton.clicked.connect(lambda: dialog.close())
         layout.addWidget(closeButton)
 
         dialog.exec_()
