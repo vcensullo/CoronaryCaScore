@@ -164,13 +164,21 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.logic = CoronaryCaScoreLogic()
 
         # Create main layout
-        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setContentsMargins(6, 6, 6, 6)
+        self.layout.setSpacing(8)
+
+        # Apply global stylesheet for cleaner look
+        self.applyGlobalStylesheet()
+
+        # Create header
+        self.setupHeader()
 
         # Create patient info section (collapsible)
         self.setupPatientInfoSection()
 
         # Create tab widget
         self.tabWidget = qt.QTabWidget()
+        self.tabWidget.setDocumentMode(True)
         self.layout.addWidget(self.tabWidget)
 
         # Setup tabs
@@ -190,6 +198,151 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Load saved settings
         self.loadSettings()
+
+    def applyGlobalStylesheet(self):
+        """Apply a clean, modern stylesheet to the widget"""
+        stylesheet = """
+            /* General styling */
+            QWidget {
+                font-family: 'Segoe UI', Arial, sans-serif;
+            }
+
+            /* Collapsible buttons */
+            ctkCollapsibleButton {
+                background-color: #f5f5f5;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                padding: 8px;
+                font-weight: bold;
+                color: #333;
+            }
+            ctkCollapsibleButton:hover {
+                background-color: #e8e8e8;
+            }
+
+            /* Primary action buttons */
+            QPushButton#primaryButton {
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 10px 20px;
+                font-weight: bold;
+                font-size: 13px;
+            }
+            QPushButton#primaryButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton#primaryButton:pressed {
+                background-color: #0D47A1;
+            }
+
+            /* Secondary buttons */
+            QPushButton#secondaryButton {
+                background-color: #fff;
+                color: #333;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                padding: 8px 16px;
+            }
+            QPushButton#secondaryButton:hover {
+                background-color: #f0f0f0;
+                border-color: #999;
+            }
+
+            /* Danger buttons */
+            QPushButton#dangerButton {
+                background-color: #fff;
+                color: #d32f2f;
+                border: 1px solid #d32f2f;
+                border-radius: 4px;
+                padding: 8px 16px;
+            }
+            QPushButton#dangerButton:hover {
+                background-color: #ffebee;
+            }
+
+            /* Tables */
+            QTableWidget {
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                gridline-color: #eee;
+                background-color: white;
+            }
+            QTableWidget::item {
+                padding: 6px;
+            }
+            QHeaderView::section {
+                background-color: #f5f5f5;
+                border: none;
+                border-bottom: 2px solid #2196F3;
+                padding: 8px;
+                font-weight: bold;
+            }
+
+            /* Input fields */
+            QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                padding: 6px;
+                background-color: white;
+            }
+            QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
+                border-color: #2196F3;
+            }
+
+            /* Checkboxes */
+            QCheckBox {
+                spacing: 8px;
+            }
+
+            /* Labels */
+            QLabel#sectionTitle {
+                font-size: 14px;
+                font-weight: bold;
+                color: #1976D2;
+                padding: 4px 0;
+            }
+            QLabel#statusSuccess {
+                color: #4CAF50;
+                font-weight: bold;
+            }
+            QLabel#statusError {
+                color: #d32f2f;
+                font-weight: bold;
+            }
+            QLabel#statusInfo {
+                color: #666;
+                font-style: italic;
+            }
+        """
+        self.parent.setStyleSheet(stylesheet)
+
+    def setupHeader(self):
+        """Setup plugin header with branding"""
+        headerFrame = qt.QFrame()
+        headerFrame.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #1565C0, stop:1 #1976D2);
+                border-radius: 6px;
+                margin-bottom: 8px;
+            }
+        """)
+        headerLayout = qt.QHBoxLayout(headerFrame)
+        headerLayout.setContentsMargins(16, 12, 16, 12)
+
+        # Title and version
+        titleLabel = qt.QLabel("<span style='color: white; font-size: 18px; font-weight: bold;'>CoronaryCaScore</span>")
+        headerLayout.addWidget(titleLabel)
+
+        headerLayout.addStretch()
+
+        # Version badge
+        versionLabel = qt.QLabel("<span style='color: rgba(255,255,255,0.9); font-size: 12px;'>v1.0</span>")
+        headerLayout.addWidget(versionLabel)
+
+        self.layout.addWidget(headerFrame)
 
     def setupPatientInfoSection(self):
         """Setup collapsible patient information section"""
@@ -255,6 +408,8 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         depsLayout.addWidget(depsLabel)
 
         self.installDepsButton = qt.QPushButton("Install/Update Dependencies")
+        self.installDepsButton.setObjectName("secondaryButton")
+        self.installDepsButton.setMinimumHeight(36)
         self.installDepsButton.clicked.connect(self.onInstallDependencies)
         depsLayout.addWidget(self.installDepsButton)
 
@@ -308,7 +463,8 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.logoPathEdit = qt.QLineEdit()
         self.logoPathEdit.setPlaceholderText("Path to company logo")
         logoLayout.addWidget(self.logoPathEdit)
-        self.browseLogoButton = qt.QPushButton("Browse")
+        self.browseLogoButton = qt.QPushButton("Browse...")
+        self.browseLogoButton.setMaximumWidth(80)
         self.browseLogoButton.clicked.connect(self.onBrowseLogo)
         logoLayout.addWidget(self.browseLogoButton)
         brandingLayout.addRow("Logo:", logoLayout)
@@ -320,6 +476,8 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Save settings button
         self.saveSettingsButton = qt.QPushButton("Save Settings")
+        self.saveSettingsButton.setObjectName("secondaryButton")
+        self.saveSettingsButton.setMinimumHeight(36)
         self.saveSettingsButton.clicked.connect(self.saveSettings)
         settingsLayout.addWidget(self.saveSettingsButton)
 
@@ -375,6 +533,8 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         viewLayout = qt.QVBoxLayout(viewCollapsible)
 
         self.applyLayoutButton = qt.QPushButton("Apply Optimal Layout")
+        self.applyLayoutButton.setObjectName("secondaryButton")
+        self.applyLayoutButton.setMinimumHeight(36)
         self.applyLayoutButton.setToolTip("Set up Four-Up view with cardiac window/level")
         self.applyLayoutButton.clicked.connect(self.onApplyLayout)
         viewLayout.addWidget(self.applyLayoutButton)
@@ -403,24 +563,31 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Territory buttons with color indicators
         territoryButtonLayout = qt.QHBoxLayout()
+        territoryButtonLayout.setSpacing(10)
         self.territoryButtonGroup = qt.QButtonGroup()
         self.territoryButtons = {}
 
         for i, (abbrev, info) in enumerate(self.TERRITORIES.items()):
             btn = qt.QPushButton(abbrev)
             btn.setCheckable(True)
-            btn.setMinimumHeight(40)
+            btn.setMinimumHeight(50)
+            btn.setMinimumWidth(70)
             btn.setStyleSheet(f"""
                 QPushButton {{
                     background-color: white;
                     border: 3px solid {info['colorHex']};
-                    border-radius: 5px;
+                    border-radius: 8px;
                     font-weight: bold;
-                    font-size: 14px;
+                    font-size: 15px;
+                    color: #333;
+                }}
+                QPushButton:hover {{
+                    background-color: {info['colorHex']}22;
                 }}
                 QPushButton:checked {{
                     background-color: {info['colorHex']};
                     color: white;
+                    border-color: {info['colorHex']};
                 }}
             """)
             btn.setToolTip(info['name'])
@@ -442,30 +609,70 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         segLayout.addWidget(toolsCollapsible)
         toolsLayout = qt.QVBoxLayout(toolsCollapsible)
 
-        # Tool buttons
+        # Tool buttons - styled for better visual feedback
         toolButtonLayout = qt.QHBoxLayout()
+        toolButtonLayout.setSpacing(8)
+
+        toolButtonStyle = """
+            QPushButton {
+                background-color: #fff;
+                border: 2px solid #ccc;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #f5f5f5;
+                border-color: #999;
+            }
+            QPushButton:checked {
+                background-color: #E3F2FD;
+                border-color: #2196F3;
+                color: #1565C0;
+            }
+        """
 
         # Click & Grow method (default, primary tool)
-        self.clickGrowButton = qt.QPushButton("Click && Grow")
+        self.clickGrowButton = qt.QPushButton(" Click && Grow")
         self.clickGrowButton.setCheckable(True)
-        self.clickGrowButton.setMinimumHeight(40)
+        self.clickGrowButton.setMinimumHeight(44)
         self.clickGrowButton.setIcon(qt.QIcon(os.path.join(os.path.dirname(__file__), 'Resources/Icons/click_grow.png')))
-        self.clickGrowButton.setStyleSheet("font-weight: bold;")
+        self.clickGrowButton.setStyleSheet(toolButtonStyle)
         self.clickGrowButton.clicked.connect(self.onClickGrowToggle)
         toolButtonLayout.addWidget(self.clickGrowButton)
 
         # Brush method (for refinements)
-        self.brushMethodButton = qt.QPushButton("Brush")
+        self.brushMethodButton = qt.QPushButton(" Brush")
         self.brushMethodButton.setCheckable(True)
-        self.brushMethodButton.setMinimumHeight(40)
+        self.brushMethodButton.setMinimumHeight(44)
         self.brushMethodButton.setIcon(qt.QIcon(os.path.join(os.path.dirname(__file__), 'Resources/Icons/brush.png')))
+        self.brushMethodButton.setStyleSheet(toolButtonStyle)
         self.brushMethodButton.clicked.connect(self.onBrushToggle)
         toolButtonLayout.addWidget(self.brushMethodButton)
 
         # Erase button
-        self.eraseButton = qt.QPushButton("Erase")
+        self.eraseButton = qt.QPushButton(" Erase")
         self.eraseButton.setCheckable(True)
-        self.eraseButton.setMinimumHeight(40)
+        self.eraseButton.setMinimumHeight(44)
+        eraseButtonStyle = """
+            QPushButton {
+                background-color: #fff;
+                border: 2px solid #ccc;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #fff5f5;
+                border-color: #d32f2f;
+            }
+            QPushButton:checked {
+                background-color: #FFEBEE;
+                border-color: #d32f2f;
+                color: #c62828;
+            }
+        """
+        self.eraseButton.setStyleSheet(eraseButtonStyle)
         self.eraseButton.clicked.connect(self.onEraseToggle)
         toolButtonLayout.addWidget(self.eraseButton)
 
@@ -499,10 +706,14 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Clear buttons
         clearLayout = qt.QHBoxLayout()
         self.clearTerritoryButton = qt.QPushButton("Clear Current Territory")
+        self.clearTerritoryButton.setObjectName("dangerButton")
+        self.clearTerritoryButton.setMinimumHeight(32)
         self.clearTerritoryButton.clicked.connect(self.onClearTerritory)
         clearLayout.addWidget(self.clearTerritoryButton)
 
         self.clearAllButton = qt.QPushButton("Clear All")
+        self.clearAllButton.setObjectName("dangerButton")
+        self.clearAllButton.setMinimumHeight(32)
         self.clearAllButton.clicked.connect(self.onClearAllTerritories)
         clearLayout.addWidget(self.clearAllButton)
         segLayout.addLayout(clearLayout)
@@ -520,9 +731,9 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         resultsLayout = qt.QVBoxLayout(resultsTab)
 
         # Calculate button
-        self.calculateButton = qt.QPushButton("Calculate All Scores")
-        self.calculateButton.setMinimumHeight(40)
-        self.calculateButton.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self.calculateButton = qt.QPushButton("  Calculate All Scores")
+        self.calculateButton.setObjectName("primaryButton")
+        self.calculateButton.setMinimumHeight(44)
         self.calculateButton.clicked.connect(self.onCalculate)
         resultsLayout.addWidget(self.calculateButton)
 
@@ -563,12 +774,17 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Visualization buttons
         vizLayout = qt.QHBoxLayout()
+        vizLayout.setSpacing(10)
 
-        self.show3DButton = qt.QPushButton("Show 3D")
+        self.show3DButton = qt.QPushButton("  Show 3D")
+        self.show3DButton.setObjectName("secondaryButton")
+        self.show3DButton.setMinimumHeight(38)
         self.show3DButton.clicked.connect(self.onShow3D)
         vizLayout.addWidget(self.show3DButton)
 
-        self.showChartsButton = qt.QPushButton("Show Charts")
+        self.showChartsButton = qt.QPushButton("  Show Charts")
+        self.showChartsButton.setObjectName("secondaryButton")
+        self.showChartsButton.setMinimumHeight(38)
         self.showChartsButton.clicked.connect(self.onShowCharts)
         vizLayout.addWidget(self.showChartsButton)
 
@@ -592,7 +808,8 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.outputDirEdit = qt.QLineEdit()
         self.outputDirEdit.setPlaceholderText("Select output directory")
         dirLayout.addWidget(self.outputDirEdit)
-        self.browseOutputButton = qt.QPushButton("Browse")
+        self.browseOutputButton = qt.QPushButton("Browse...")
+        self.browseOutputButton.setMaximumWidth(80)
         self.browseOutputButton.clicked.connect(self.onBrowseOutput)
         dirLayout.addWidget(self.browseOutputButton)
         outputLayout.addRow("Directory:", dirLayout)
@@ -620,9 +837,9 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         optionsLayout.addWidget(self.includePercentileChartCheck)
 
         # Generate button
-        self.generateReportButton = qt.QPushButton("Generate PDF Report")
-        self.generateReportButton.setMinimumHeight(40)
-        self.generateReportButton.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self.generateReportButton = qt.QPushButton("  Generate PDF Report")
+        self.generateReportButton.setObjectName("primaryButton")
+        self.generateReportButton.setMinimumHeight(44)
         self.generateReportButton.clicked.connect(self.onGenerateReport)
         reportLayout.addWidget(self.generateReportButton)
 
