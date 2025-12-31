@@ -921,21 +921,38 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def createTerritorySegmentations(self, volumeNode):
         """Create segmentation nodes for each territory"""
         for abbrev, info in self.TERRITORIES.items():
-            if self.segmentationsByTerritory[abbrev] is None:
-                segNode = slicer.mrmlScene.AddNewNodeByClass(
-                    "vtkMRMLSegmentationNode",
-                    f"CoronaryCalcium_{abbrev}"
-                )
-                segNode.SetReferenceImageGeometryParameterFromVolumeNode(volumeNode)
-                segNode.CreateDefaultDisplayNodes()
+            # Check if node exists and is still valid in the scene
+            existingNode = self.segmentationsByTerritory[abbrev]
+            nodeIsValid = (existingNode is not None and
+                          slicer.mrmlScene.IsNodePresent(existingNode))
 
-                # Create empty segment with territory color
-                segmentation = segNode.GetSegmentation()
-                segmentId = segmentation.AddEmptySegment(f"Calcium_{abbrev}")
-                segment = segmentation.GetSegment(segmentId)
-                segment.SetColor(*info['color'])
+            if not nodeIsValid:
+                # Reset reference if node was deleted
+                self.segmentationsByTerritory[abbrev] = None
 
-                self.segmentationsByTerritory[abbrev] = segNode
+                # Try to find existing node by name (in case it was recreated)
+                existingNodes = slicer.util.getNodesByClass("vtkMRMLSegmentationNode")
+                for node in existingNodes:
+                    if node.GetName() == f"CoronaryCalcium_{abbrev}":
+                        self.segmentationsByTerritory[abbrev] = node
+                        break
+
+                # If still not found, create new node
+                if self.segmentationsByTerritory[abbrev] is None:
+                    segNode = slicer.mrmlScene.AddNewNodeByClass(
+                        "vtkMRMLSegmentationNode",
+                        f"CoronaryCalcium_{abbrev}"
+                    )
+                    segNode.SetReferenceImageGeometryParameterFromVolumeNode(volumeNode)
+                    segNode.CreateDefaultDisplayNodes()
+
+                    # Create empty segment with territory color
+                    segmentation = segNode.GetSegmentation()
+                    segmentId = segmentation.AddEmptySegment(f"Calcium_{abbrev}")
+                    segment = segmentation.GetSegment(segmentId)
+                    segment.SetColor(*info['color'])
+
+                    self.segmentationsByTerritory[abbrev] = segNode
 
         self.updateTerritorySummary()
 
@@ -989,10 +1006,17 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 self.deactivateAllTools()
 
             volumeNode = self.volumeSelector.currentNode()
+            if not volumeNode:
+                slicer.util.warningDisplay("Please select a volume first")
+                self.clickGrowButton.setChecked(False)
+                return
+
+            # Ensure segmentation nodes exist (recreate if deleted)
+            self.createTerritorySegmentations(volumeNode)
             segNode = self.segmentationsByTerritory[self.currentTerritory]
 
-            if not volumeNode or not segNode:
-                slicer.util.warningDisplay("Please select a volume first")
+            if not segNode:
+                slicer.util.warningDisplay("Error creating segmentation node")
                 self.clickGrowButton.setChecked(False)
                 return
 
@@ -1021,11 +1045,18 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             if self.activeToolName and self.activeToolName != 'brush':
                 self.deactivateAllTools()
 
-            segNode = self.segmentationsByTerritory[self.currentTerritory]
             volumeNode = self.volumeSelector.currentNode()
-
-            if not segNode or not volumeNode:
+            if not volumeNode:
                 slicer.util.warningDisplay("Please select a volume first")
+                self.brushMethodButton.setChecked(False)
+                return
+
+            # Ensure segmentation nodes exist (recreate if deleted)
+            self.createTerritorySegmentations(volumeNode)
+            segNode = self.segmentationsByTerritory[self.currentTerritory]
+
+            if not segNode:
+                slicer.util.warningDisplay("Error creating segmentation node")
                 self.brushMethodButton.setChecked(False)
                 return
 
@@ -1054,11 +1085,18 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             if self.activeToolName and self.activeToolName != 'erase':
                 self.deactivateAllTools()
 
-            segNode = self.segmentationsByTerritory[self.currentTerritory]
             volumeNode = self.volumeSelector.currentNode()
-
-            if not segNode or not volumeNode:
+            if not volumeNode:
                 slicer.util.warningDisplay("Please select a volume first")
+                self.eraseButton.setChecked(False)
+                return
+
+            # Ensure segmentation nodes exist (recreate if deleted)
+            self.createTerritorySegmentations(volumeNode)
+            segNode = self.segmentationsByTerritory[self.currentTerritory]
+
+            if not segNode:
+                slicer.util.warningDisplay("Error creating segmentation node")
                 self.eraseButton.setChecked(False)
                 return
 
