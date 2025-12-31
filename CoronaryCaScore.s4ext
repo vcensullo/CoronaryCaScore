@@ -19,7 +19,7 @@ contributors Vittorio Censullo (AITeRTC)
 # Category in Slicer Modules menu
 category Cardiac
 
-# Icon URL (128x128 png)
+# Icon URL (png)
 iconurl https://raw.githubusercontent.com/vcensullo/CoronaryCaScore/main/CoronaryCaScore.png
 
 # Status
