@@ -1980,53 +1980,13 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
             return {'percentile': '--', 'comparison': 'Percentile data not available'}
 
     def create3DVisualization(self, segmentationsByTerritory, territories, volumeNode=None):
-        """Create 3D visualization with territory-based coloring and semi-transparent heart VRT"""
+        """Create 3D visualization with territory-based coloring"""
         # Set up 3D-only layout
         layoutManager = slicer.app.layoutManager()
         layoutManager.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUp3DView)
 
         threeDWidget = layoutManager.threeDWidget(0)
         threeDView = threeDWidget.threeDView()
-
-        # Create volume rendering of the heart if volume is provided
-        if volumeNode:
-            # Get or create volume rendering display node
-            volRenLogic = slicer.modules.volumerendering.logic()
-            displayNode = volRenLogic.GetFirstVolumeRenderingDisplayNode(volumeNode)
-
-            if not displayNode:
-                displayNode = volRenLogic.CreateDefaultVolumeRenderingNodes(volumeNode)
-
-            if displayNode:
-                # Set preset for cardiac CT (soft tissue)
-                displayNode.SetVisibility(True)
-
-                # Get the volume property and set opacity for semi-transparency
-                volumeProperty = displayNode.GetVolumePropertyNode()
-                if volumeProperty:
-                    # Create a custom opacity function for heart visualization
-                    opacityFunc = vtk.vtkPiecewiseFunction()
-                    # Low opacity for soft tissue to see through
-                    opacityFunc.AddPoint(-1000, 0.0)    # Air - invisible
-                    opacityFunc.AddPoint(-100, 0.0)     # Fat - invisible
-                    opacityFunc.AddPoint(0, 0.0)        # Water - invisible
-                    opacityFunc.AddPoint(100, 0.05)     # Soft tissue - very faint
-                    opacityFunc.AddPoint(200, 0.08)     # Muscle - faint
-                    opacityFunc.AddPoint(300, 0.0)      # Start hiding calcium range (will show via segmentation)
-                    opacityFunc.AddPoint(1000, 0.0)     # Bone - hidden (we want calcium from segmentation)
-
-                    volumeProperty.GetVolumeProperty().SetScalarOpacity(opacityFunc)
-
-                    # Color transfer function - gray for soft tissue
-                    colorFunc = vtk.vtkColorTransferFunction()
-                    colorFunc.AddRGBPoint(-1000, 0.0, 0.0, 0.0)
-                    colorFunc.AddRGBPoint(0, 0.5, 0.4, 0.4)      # Soft pinkish-gray
-                    colorFunc.AddRGBPoint(200, 0.7, 0.6, 0.6)    # Lighter
-                    colorFunc.AddRGBPoint(500, 0.8, 0.8, 0.8)    # Light gray
-
-                    volumeProperty.GetVolumeProperty().SetColor(colorFunc)
-
-                print("Heart VRT created with semi-transparency")
 
         # Show each territory's segmentation in 3D with full opacity
         for territory, segNode in segmentationsByTerritory.items():
@@ -2036,7 +1996,6 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
                 if displayNode:
                     displayNode.SetVisibility3D(True)
                     displayNode.SetOpacity3D(1.0)  # Full opacity for calcium
-                    displayNode.SetVisibility2DFill(False)  # Hide in 2D views
 
         # Reset 3D view and set background
         threeDView.resetFocalPoint()
