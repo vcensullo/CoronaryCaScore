@@ -1095,7 +1095,8 @@ class CoronaryCaScoreWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             slicer.util.warningDisplay("Please calculate scores first")
             return
 
-        self.logic.createCharts(self.currentResults, self.TERRITORIES)
+        patientInfo = self.getPatientInfo()
+        self.logic.createCharts(self.currentResults, self.TERRITORIES, patientInfo)
 
     def onGenerateReport(self):
         """Generate PDF report"""
@@ -2006,7 +2007,7 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
         viewNode.SetBackgroundColor(0.1, 0.1, 0.15)
         viewNode.SetBackgroundColor2(0.2, 0.2, 0.25)
 
-    def createCharts(self, results, territories, showInWindow=True):
+    def createCharts(self, results, territories, patientInfo=None, showInWindow=True):
         """Create analysis charts and optionally display in a window
 
         Returns the path to the saved chart image for PDF inclusion.
@@ -2015,9 +2016,40 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
             import matplotlib
             matplotlib.use('Agg')
             import matplotlib.pyplot as plt
+            import numpy as np
 
-            # Create figure with subplots
-            fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+            # Check if we have valid patient info for percentile chart
+            hasPercentileData = False
+            percentileData = None
+            patientScore = results.get('Total', {}).get('agatston_score', 0)
+
+            if patientInfo:
+                age = patientInfo.get('age')
+                sex = 'Male' if patientInfo.get('sex') == 'M' else 'Female'
+                ethnicity = patientInfo.get('ethnicity', 'Caucasian')
+
+                if age and age >= 45:
+                    # Determine age group
+                    if age < 55:
+                        ageGroup = '45-54'
+                    elif age < 65:
+                        ageGroup = '55-64'
+                    elif age < 75:
+                        ageGroup = '65-74'
+                    else:
+                        ageGroup = '75-84'
+
+                    try:
+                        percentileData = self.MESA_PERCENTILES[sex][ethnicity][ageGroup]
+                        hasPercentileData = True
+                    except KeyError:
+                        pass
+
+            # Create figure with 2 or 3 subplots depending on percentile data availability
+            if hasPercentileData:
+                fig, axes = plt.subplots(1, 3, figsize=(14, 4))
+            else:
+                fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 
             # Bar chart of scores by territory
             territoryNames = list(territories.keys())
@@ -2047,6 +2079,48 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
                 axes[1].set_title('Distribution by Territory')
                 axes[1].axis('off')
 
+            # Percentile chart (if data available)
+            if hasPercentileData:
+                ax = axes[2]
+
+                # Get percentile values
+                p25 = percentileData['25']
+                p50 = percentileData['50']
+                p75 = percentileData['75']
+                p90 = percentileData['90']
+
+                # Create bar chart for percentile reference values
+                percentileLabels = ['25th', '50th', '75th', '90th']
+                percentileValues = [p25, p50, p75, p90]
+                barColors = ['#4CAF50', '#2196F3', '#FF9800', '#F44336']  # Green, Blue, Orange, Red
+
+                bars = ax.bar(percentileLabels, percentileValues, color=barColors, edgecolor='black', linewidth=0.5, alpha=0.7)
+
+                # Add horizontal line for patient's score
+                ax.axhline(y=patientScore, color='#9C27B0', linewidth=2.5, linestyle='--', label=f'Your Score: {patientScore:.0f} AU')
+
+                # Calculate and display patient's percentile
+                mesaResult = self.getMESAPercentile(patientScore, patientInfo)
+                patientPercentile = mesaResult.get('percentile', '--')
+
+                ax.set_ylabel('Agatston Score (AU)')
+                ax.set_xlabel('Population Percentile')
+                ax.set_title(f'MESA Percentile\n({sex}, {ageGroup} yrs, {ethnicity})')
+                ax.legend(loc='upper left', fontsize=9)
+
+                # Add value labels on bars
+                for bar, val in zip(bars, percentileValues):
+                    if val > 0:
+                        ax.text(bar.get_x() + bar.get_width()/2, val + max(percentileValues)*0.02,
+                               f'{val:.0f}', ha='center', va='bottom', fontsize=9)
+
+                # Add patient percentile annotation
+                if patientPercentile != '--':
+                    ax.annotate(f'Your Percentile: {patientPercentile}th',
+                               xy=(0.5, 0.95), xycoords='axes fraction',
+                               ha='center', fontsize=10, fontweight='bold',
+                               bbox=dict(boxstyle='round', facecolor='#E1BEE7', alpha=0.8))
+
             plt.tight_layout()
 
             # Save chart
@@ -2057,7 +2131,7 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
 
             # Display in a Qt window if requested
             if showInWindow:
-                self.showChartWindow(chartPath, results, territories)
+                self.showChartWindow(chartPath, results, territories, patientInfo)
 
             return chartPath
 
@@ -2065,17 +2139,17 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
             slicer.util.warningDisplay("matplotlib not installed. Please install dependencies.")
             return None
 
-    def showChartWindow(self, chartPath, results, territories):
+    def showChartWindow(self, chartPath, results, territories, patientInfo=None):
         """Display charts in a popup window"""
         # Create dialog
         dialog = qt.QDialog()
         dialog.setWindowTitle("Coronary Calcium Score - Charts")
-        dialog.setMinimumSize(800, 500)
+        dialog.setMinimumSize(900, 550)
 
         layout = qt.QVBoxLayout(dialog)
 
         # Add title
-        titleLabel = qt.QLabel("<h2>Calcium Score Distribution</h2>")
+        titleLabel = qt.QLabel("<h2>Calcium Score Distribution & MESA Percentile</h2>")
         titleLabel.setAlignment(qt.Qt.AlignCenter)
         layout.addWidget(titleLabel)
 
@@ -2083,14 +2157,23 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
         if os.path.exists(chartPath):
             imageLabel = qt.QLabel()
             pixmap = qt.QPixmap(chartPath)
-            scaledPixmap = pixmap.scaledToWidth(750, qt.Qt.SmoothTransformation)
+            scaledPixmap = pixmap.scaledToWidth(850, qt.Qt.SmoothTransformation)
             imageLabel.setPixmap(scaledPixmap)
             imageLabel.setAlignment(qt.Qt.AlignCenter)
             layout.addWidget(imageLabel)
 
         # Add summary
         totalScore = results.get('Total', {}).get('agatston_score', 0)
-        summaryLabel = qt.QLabel(f"<b>Total Agatston Score: {totalScore:.1f} AU</b>")
+        summaryText = f"<b>Total Agatston Score: {totalScore:.1f} AU</b>"
+
+        # Add percentile info if available
+        if patientInfo:
+            mesaResult = self.getMESAPercentile(totalScore, patientInfo)
+            percentile = mesaResult.get('percentile', '--')
+            if percentile != '--':
+                summaryText += f"  |  <b>MESA Percentile: {percentile}th</b>"
+
+        summaryLabel = qt.QLabel(summaryText)
         summaryLabel.setAlignment(qt.Qt.AlignCenter)
         layout.addWidget(summaryLabel)
 
@@ -2251,12 +2334,14 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
 
             # Add charts if option enabled
             if options.get('includeCharts', True):
-                # Generate chart image
-                chartPath = self.createCharts(results, territories, showInWindow=False)
+                # Generate chart image (include percentile chart if option enabled)
+                chartPath = self.createCharts(results, territories, patientInfo if options.get('includePercentileChart', True) else None, showInWindow=False)
                 if chartPath and os.path.exists(chartPath):
                     story.append(Paragraph("<b>CALCIUM DISTRIBUTION CHARTS</b>", styles['Heading2']))
                     from reportlab.platypus import Image
-                    chartImg = Image(chartPath, width=6*inch, height=2.4*inch)
+                    # Wider image to accommodate percentile chart (7 inches for 3 charts, 6 for 2)
+                    chartWidth = 7*inch if options.get('includePercentileChart', True) else 6*inch
+                    chartImg = Image(chartPath, width=chartWidth, height=2.4*inch)
                     story.append(chartImg)
                     story.append(Spacer(1, 0.3*inch))
 
