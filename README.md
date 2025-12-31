@@ -6,6 +6,12 @@
 ![License](https://img.shields.io/badge/license-Restrictive-orange)
 ![3D Slicer](https://img.shields.io/badge/3D%20Slicer-5.0+-red)
 
+## Video Tutorial
+
+[![Video Tutorial](https://img.youtube.com/vi/Vl_HmS9TFlQ/0.jpg)](https://youtu.be/Vl_HmS9TFlQ)
+
+**[Watch the installation and usage tutorial on YouTube](https://youtu.be/Vl_HmS9TFlQ)**
+
 ## Authors
 
 **Vittorio Censullo**
