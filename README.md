@@ -23,10 +23,10 @@
 ### Core Functionality
 - **Per-Vessel Analysis**: Separate scoring for LAD, LCx, RCA, and Left Main
 - **Guided Tab-Based Workflow**: Intuitive step-by-step process for coronary calcium scoring
-- **Advanced Segmentation Methods**:
-  - **Point and Click**: One-click calcium island segmentation (Region Growing)
-  - **ROI Box**: Rectangular box threshold-based segmentation
-  - **Paint Mode**: Manual painting with threshold-guided brush
+- **Segmentation Tools**:
+  - **Click & Grow**: One-click 3D region growing for fast calcium segmentation
+  - **Brush**: Manual painting with threshold-guided brush for refinements
+  - **Erase**: Remove unwanted segmentation areas
 - **Color-Coded Territories**: Visual distinction between coronary vessels
   - LAD: Red
   - LCx: Blue
@@ -110,10 +110,10 @@ The plugin requires the `reportlab` and `matplotlib` libraries for PDF and chart
 
 ### Tab 2: Calcium Segmentation
 1. **Select coronary territory** (LAD, LCx, RCA, or LM)
-2. Choose segmentation method:
-   - **Click & Grow**: Click on calcium to automatically segment
-   - **ROI Box**: Place box around coronary artery -> Apply threshold
-   - **Paint Mode**: Manually paint calcium regions
+2. Choose segmentation tool:
+   - **Click & Grow**: Click on calcium to automatically segment with 3D region growing
+   - **Brush**: Manually paint calcium regions with threshold guidance
+   - **Erase**: Remove unwanted segmentation areas
 3. Repeat for each territory with calcium
 4. Territory summary shows segmentation status
 5. Tab 3 enables after segmentation
@@ -127,9 +127,10 @@ The plugin requires the `reportlab` and `matplotlib` libraries for PDF and chart
    - Number of lesions
 3. View **MESA/ACC risk category**
 4. View **MESA percentile** (age/sex/ethnicity adjusted)
-5. **Show 3D**: Visualize calcium with territory-based coloring
-6. **Show Charts**: View distribution charts
-7. Tab 4 enables after calculation
+5. **Show 3D**: Visualize calcium with territory-based coloring and semi-transparent heart context
+6. **Show Charts**: View distribution charts including MESA percentile gauge
+7. **MPR View**: Reset to standard multiplanar reconstruction layout
+8. Tab 4 enables after calculation
 
 ### Tab 4: Generate Report
 1. Select output directory
@@ -215,12 +216,16 @@ If you use this plugin in your research, please cite:
 
 ## Version History
 
-**Version 1.0** (December 2025) - Initial Release
+**Version 1.0** (December 2025)
 - Per-vessel calcium scoring (LAD, LCx, RCA, LM)
-- MESA/ACC risk classification
-- MESA percentile calculation
+- MESA/ACC risk classification and percentile calculation
+- Segmentation tools: Click & Grow (3D region growing), Brush, Erase
 - Color-coded territory visualization
-- Comprehensive PDF reporting
+- 3D view with semi-transparent heart context
+- MESA percentile gauge chart
+- MPR View button for layout reset
+- Mass Calibration Factor for accurate calcium mass calculation
+- Comprehensive PDF reporting with customizable logo
 
 ---
 

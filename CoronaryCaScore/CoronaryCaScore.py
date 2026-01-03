@@ -2043,14 +2043,15 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
             if sliceThickness is None:
                 sliceThickness = sliceSpacing
 
-            # CRITICAL: Handle overlapping slices (standard Agatston uses 3mm increment)
-            STANDARD_SLICE_INCREMENT = 3.0  # mm (Agatston standard)
+            # Standard Agatston uses 3.0mm slice thickness
+            STANDARD_SLICE_THICKNESS = 3.0  # mm (Agatston standard)
 
-            if sliceSpacing < 2.5:  # Overlapping slices detected
-                sliceStep = max(1, int(round(STANDARD_SLICE_INCREMENT / sliceSpacing)))
-                print(f"  {territory}: Overlapping slices (spacing={sliceSpacing:.1f}mm), using step={sliceStep}")
-            else:
-                sliceStep = 1
+            # Normalization factor for non-3mm slices
+            # Process ALL slices and normalize score at the end
+            sliceNormalizationFactor = sliceSpacing / STANDARD_SLICE_THICKNESS
+            sliceStep = 1  # Process all slices
+
+            print(f"  {territory}: spacing={sliceSpacing:.2f}mm, normalization factor={sliceNormalizationFactor:.3f}")
 
             # 2D slice-by-slice connected component labeling (Agatston standard)
             labeled_array = np.zeros_like(segmentArray, dtype=np.int32)
@@ -2145,12 +2146,17 @@ class CoronaryCaScoreLogic(ScriptedLoadableModuleLogic):
             meanDensity = np.mean(allDensities) if allDensities else 0
             maxDensity = np.max(allDensities) if allDensities else 0
 
+            # Apply slice normalization factor to score
+            # This normalizes the score to 3mm equivalent
+            normalizedAgatston = totalAgatston * sliceNormalizationFactor
+            totalAgatston = normalizedAgatston
+
             # Calcium Mass calculation using calibration factor
             # Formula: Mass (mg) = Volume (mm³) × Mean_Density (HU) × Calibration_Factor / 1000
             # Default calibration factor: 0.81 (for 130 HU = 114.5 mg/cm³ CaHA)
             equivalentMass = totalVolume * meanDensity * calibrationFactor / 1000 if totalVolume > 0 else 0
 
-            print(f"  {territory}: Score={totalAgatston:.1f} AU, Lesions={validLesionCount}, Volume={totalVolume:.1f} mm³, Mass={equivalentMass:.1f} mg")
+            print(f"  {territory}: Score={totalAgatston:.1f} AU (normalized), Lesions={validLesionCount}, Volume={totalVolume:.1f} mm³, Mass={equivalentMass:.1f} mg")
 
             return {
                 'agatston_score': totalAgatston,
